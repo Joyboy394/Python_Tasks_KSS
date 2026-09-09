@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Management System</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #343a40; margin-bottom: 20px; }
+        form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group.full-width { grid-column: span 2; display: flex; flex-direction: row; align-items: center; gap: 10px; }
+        label { margin-bottom: 5px; font-weight: bold; color: #495057; }
+        input[type="text"], input[type="number"] { padding: 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 16px; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; color: white; transition: background 0.3s; }
+        .btn-submit { background-color: #28a745; grid-column: span 2; }
+        .btn-submit:hover { background-color: #218838; }
+        .btn-edit { background-color: #ffc107; color: #212529; margin-right: 5px; }
+        .btn-delete { background-color: #dc3545; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; border-bottom: 1px solid #dee2e6; text-align: left; }
+        th { background-color: #007bff; color: white; }
+        tr:hover { background-color: #f1f3f5; }
+        .error { color: red; grid-column: span 2; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎓 Student Management System</h1>
+    
+    <form id="studentForm">
+        <div class="form-group">
+            <label for="studentId">Student ID</label>
+            <input type="number" id="studentId" required placeholder="e.g. 101">
+        </div>
+        <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" required placeholder="e.g. Jane Doe">
+        </div>
+        <div class="form-group">
+            <label for="age">Age</label>
+            <input type="number" id="age" required placeholder="e.g. 20">
+        </div>
+        <div class="form-group">
+            <label for="grade">Grade</label>
+            <input type="text" id="grade" required placeholder="e.g. A, B, or 10th">
+        </div>
+        <div class="form-group full-width">
+            <input type="checkbox" id="isEnrolled" checked>
+            <label for="isEnrolled" style="margin: 0;">Currently Enrolled</label>
+        </div>
+        <div id="errorMsg" class="error"></div>
+        <button type="submit" class="btn-submit" id="submitBtn">Add Student</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Age</th>
+                <th>Grade</th>
+                <th>Enrolled</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="studentTableBody">
+            <!-- Rows will be populated by JavaScript -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Point this to your FastAPI or Flask Backend URL
+    const API_URL = "http://127.0.0.1:8000/students";
+    let isEditing = false;
+
+    // Load students on page startup
+    document.addEventListener("DOMContentLoaded", fetchStudents);
+
+    // Handle Form Submission
+    document.getElementById("studentForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        
+        const id = document.getElementById("studentId").value;
+        const studentData = {
+            id: parseInt(id),
+            name: document.getElementById("name").value,
+            age: parseInt(document.getElementById("age").value),
+            grade: document.getElementById("grade").value,
+            is_enrolled: document.getElementById("isEnrolled").checked
+        };
+
+        try {
+            const method = isEditing ? "PUT" : "POST";
+            const url = isEditing ? `${API_URL}/${id}` : API_URL;
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(studentData)
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Failed to save student");
+            }
+
+            document.getElementById("studentForm").reset();
+            document.getElementById("studentId").disabled = false;
+            document.getElementById("submitBtn").textContent = "Add Student";
+            document.getElementById("errorMsg").textContent = "";
+            isEditing = false;
+            
+            fetchStudents();
+
+        } catch (error) {
+            document.getElementById("errorMsg").textContent = error.message;
+        }
+    });
+
+    // Fetch and Display All Students
+    async function fetchStudents() {
+        try {
+            const response = await fetch(API_URL);
+            const result = await response.json();
+            const students = result.data || [];
+            
+            const tbody = document.getElementById("studentTableBody");
+            tbody.innerHTML = "";
+
+            students.forEach(student => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${student.id}</td>
+                    <td>${student.name}</td>
+                    <td>${student.age}</td>
+                    <td>${student.grade}</td>
+                    <td>${student.is_enrolled ? "Yes" : "No"}</td>
+                    <td>
+                        <button class="btn-edit" onclick="editStudent(${student.id}, '${student.name}', ${student.age}, '${student.grade}', ${student.is_enrolled})">Edit</button>
+                        <button class="btn-delete" onclick="deleteStudent(${student.id})">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            console.error("Error fetching students:", error);
+        }
+    }
+
+    // Populate form to edit student
+    function editStudent(id, name, age, grade, is_enrolled) {
+        document.getElementById("studentId").value = id;
+        document.getElementById("studentId").disabled = true; // Prevent ID modification
+        document.getElementById("name").value = name;
+        document.getElementById("age").value = age;
+        document.getElementById("grade").value = grade;
+        document.getElementById("isEnrolled").checked = is_enrolled;
+        
+        document.getElementById("submitBtn").textContent = "Update Student";
+        isEditing = true;
+    }
+
+    // Delete Student
+    async function deleteStudent(id) {
+        if (!confirm(`Are you sure you want to delete student ID ${id}?`)) return;
+
+        try {
+            await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+            fetchStudents();
+        } catch (error) {
+            console.error("Error deleting student:", error);
+        }
+    }
+</script>
+
+</body>
+</html>
